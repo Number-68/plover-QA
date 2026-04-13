@@ -1,0 +1,60 @@
+#!/usr/bin/env python3
+import subprocess
+import sys
+from pathlib import Path
+
+def run(cmd):
+    """Run a shell command and return (exit_code, stdout)."""
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    return result.returncode, result.stdout.strip()
+
+def get_staged_python_files():
+    """Return a list of staged .py files."""
+    code, out = run(["git", "diff", "--cached", "--name-only", "--diff-filter=ACM"])
+    if code != 0:
+        print("Failed to list staged files.")
+        sys.exit(1)
+
+    files = [f for f in out.splitlines() if f.endswith(".py")]
+    return files
+
+def main():
+    staged_files = get_staged_python_files()
+
+    if not staged_files:
+        print("No staged Python files. Skipping formatting check.")
+        return 0
+
+    print("Checking formatting with Black...")
+
+    # 1. Check formatting
+    check_cmd = ["black", "--check"] + staged_files
+    check_code, _ = run(check_cmd)
+
+    if check_code == 0:
+        print("All staged Python files are already formatted.")
+        return 0
+
+    print("Formatting needed. Running Black...")
+
+    # 2. Format files
+    fmt_cmd = ["black"] + staged_files
+    fmt_code, _ = run(fmt_cmd)
+
+    if fmt_code != 0:
+        print("Black failed to format the code.")
+        sys.exit(1)
+
+    print("Re-adding formatted files...")
+    add_cmd = ["git", "add"] + staged_files
+    add_code, _ = run(add_cmd)
+
+    if add_code != 0:
+        print("Failed to re-add formatted files.")
+        sys.exit(1)
+
+    print("Formatting complete. Proceeding with commit.")
+    return 0
+
+if __name__ == "__main__":
+    sys.exit(main())
